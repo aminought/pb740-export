@@ -1,8 +1,9 @@
 import base64
 import json
 import sqlite3
-from typing import List
 import urllib.parse as urlparse
+from datetime import datetime
+from typing import List
 
 import click
 import dominate
@@ -80,13 +81,16 @@ class Note:
 
 
 class Bookmark:
-    def __init__(self, page: int, text: str):
+    def __init__(self, page: int, text: str, created: datetime):
         self.page = page
         self.text = text
+        self.created = created
 
     def render(self):
         with div():
-            p(f'Page: {self.page}, Text: {self.text}')
+            p(f'Page: {self.page}')
+            p(f'Text: {self.text}')
+            p(f'Created: {self.created}')
 
 
 def get_books(con: sqlite3.Connection) -> List[Book]:
@@ -198,11 +202,12 @@ def get_bookmarks(con: sqlite3.Connection,
         text = select_quotation(con, item_id)
         val = select_tag_value(con, item_id, 'bm.book_mark')
         o = json.loads(val)
+        created = datetime.fromtimestamp(o['created'])
         anchor = o['anchor']
         parsed = urlparse.urlparse(anchor)
         query = urlparse.parse_qs(parsed.query)
         page = int(query['page'][0])
-        bookmark = Bookmark(page, text)
+        bookmark = Bookmark(page, text, created)
         bookmarks.append(bookmark)
     return bookmarks
 
