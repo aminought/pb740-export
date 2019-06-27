@@ -78,22 +78,23 @@ def get_highlights(con: sqlite3.Connection,
             val = row[0]
             o = json.loads(val)
             text = o['text']
-            if text == 'Snapshot':
-                sql = '''
-                    SELECT Val
-                    FROM Tags t
-                    JOIN TagNames tn ON tn.OID = t.TagID
-                    WHERE t.ItemId = ?
-                    AND tn.TagName = 'bm.image'
-                '''
-                cur = con.execute(sql, (item_id,))
-                row = cur.fetchone()
-                if row is not None:
-                    highlight = Highlight(None, row[0])
-                    highlights.append(highlight)
+
+            sql = '''
+                SELECT Val
+                FROM Tags t
+                JOIN TagNames tn ON tn.OID = t.TagID
+                WHERE t.ItemId = ?
+                AND tn.TagName = 'bm.image'
+            '''
+            cur = con.execute(sql, (item_id,))
+            row = cur.fetchone()
+            if row is not None:
+                snapshot = row[0]
             else:
-                highlight = Highlight(o['text'])
-                highlights.append(highlight)
+                snapshot = None
+
+            highlight = Highlight(text, snapshot)
+            highlights.append(highlight)
 
     return highlights
 
@@ -108,12 +109,13 @@ def export(books: List[Book], path: str):
                 h2(book.title)
                 with ol():
                     for highlight in book.highlights:
-                        if highlight.text is not None:
-                            li(highlight.text)
-                        else:
-                            image = highlight.snapshot
-                            b64 = base64.b64encode(image).decode('utf8')
-                            li(raw(f'<img src="data:image/jpeg;base64,{b64}"/>'))
+                        with li():
+                            with div():
+                                p(highlight.text)
+                                if highlight.snapshot is not None:
+                                    image = highlight.snapshot
+                                    b64 = base64.b64encode(image).decode('utf8')
+                                    raw(f'<img src="data:image/jpeg;base64,{b64}"/>')
 
     with open(path, 'w') as f:
         f.write(doc.render())
