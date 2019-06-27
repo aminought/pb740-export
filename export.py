@@ -24,17 +24,17 @@ class Book:
             return
 
         with div():
-            h1(self.title)
+            h2(self.title)
 
             if len(self.highlights) > 0:
-                h2('Highlights')
+                h3('Highlights')
                 with ol():
                     for highlight in self.highlights:
                         with li():
                             highlight.render()
             
             if len(self.notes) > 0:
-                h2('Notes')
+                h3('Notes')
                 with ol():
                     for note in self.notes:
                         with li():
