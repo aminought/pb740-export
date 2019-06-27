@@ -195,9 +195,7 @@ def get_notes(con: sqlite3.Connection,
 def get_bookmarks(con: sqlite3.Connection,
                   book_oid: int) -> List[Bookmark]:
     bookmarks = []
-
     item_ids = select_items(con, book_oid, 'bookmark')
-
     for item_id in item_ids:
         text = select_quotation(con, item_id)
         val = select_tag_value(con, item_id, 'bm.book_mark')
