@@ -179,7 +179,7 @@ def get_highlights(con: sqlite3.Connection,
 
 
 def get_notes(con: sqlite3.Connection,
-              book_oid: int) -> List[Highlight]:
+              book_oid: int) -> List[Note]:
     notes = []
     item_ids = select_items(con, book_oid, 'note')
     for item_id in item_ids:
@@ -193,7 +193,7 @@ def get_notes(con: sqlite3.Connection,
 
 
 def get_bookmarks(con: sqlite3.Connection,
-                  book_oid: int) -> List[Highlight]:
+                  book_oid: int) -> List[Bookmark]:
     bookmarks = []
 
     item_ids = select_items(con, book_oid, 'bookmark')
