@@ -20,12 +20,26 @@ class Book:
         self.highlights = []
 
     def render(self):
+        if len(self.highlights) == 0 and len(self.notes) == 0:
+            return
+
         with div():
-            h2(self.title)
-            with ol():
-                for highlight in self.highlights:
-                    with li():
-                        highlight.render()
+            h1(self.title)
+
+            if len(self.highlights) > 0:
+                h2('Highlights')
+                with ol():
+                    for highlight in self.highlights:
+                        with li():
+                            highlight.render()
+            
+            if len(self.notes) > 0:
+                h2('Notes')
+                with ol():
+                    for note in self.notes:
+                        with li():
+                            note.render()
+
 
 class Highlight:
     def __init__(self, text: str, snapshot: bytes = None):
@@ -40,6 +54,16 @@ class Highlight:
                 b64 = base64.b64encode(image).decode('utf8')
                 raw(f'<img src="data:image/jpeg;base64,{b64}"/>')
 
+
+class Note:
+    def __init__(self, quotation: str, note: str):
+        self.quotation = quotation
+        self.note = note
+
+    def render(self):
+        with div():
+            p(self.note)
+            blockquote(p(self.quotation))
 
 
 def get_books(con: sqlite3.Connection) -> List[Book]:
@@ -61,7 +85,10 @@ def get_file_name(con: sqlite3.Connection, book_oid: int) -> str:
     return row[0]
 
 
-def get_item_ids(con: sqlite3.Connection, book_oid: int) -> List[int]:
+def get_highlights(con: sqlite3.Connection,
+                   book_oid: int) -> List[Highlight]:
+    highlights = []
+
     sql = '''
         SELECT t.ItemID
         FROM Items i
@@ -73,13 +100,6 @@ def get_item_ids(con: sqlite3.Connection, book_oid: int) -> List[int]:
     '''
     cur = con.execute(sql, (book_oid,))
     item_ids = [row[0] for row in cur]
-    return item_ids
-
-
-def get_highlights(con: sqlite3.Connection,
-                   book_oid: int) -> List[Highlight]:
-    highlights = []
-    item_ids = get_item_ids(con, book_oid)
 
     for item_id in item_ids:
         sql = '''
@@ -116,11 +136,66 @@ def get_highlights(con: sqlite3.Connection,
     return highlights
 
 
+def get_notes(con: sqlite3.Connection,
+              book_oid: int) -> List[Highlight]:
+    notes = []
+
+    sql = '''
+        SELECT t.ItemID
+        FROM Items i
+        JOIN Tags t ON t.ItemID = i.OID
+        JOIN TagNames tn ON tn.OID = t.TagID    
+        WHERE i.ParentID = ?
+        AND tn.TagName = 'bm.type'
+        AND t.Val = 'note'
+    '''
+    cur = con.execute(sql, (book_oid,))
+    item_ids = [row[0] for row in cur]
+
+    for item_id in item_ids:
+        sql = '''
+            SELECT Val
+            FROM Tags t
+            JOIN TagNames tn ON tn.OID = t.TagID
+            WHERE t.ItemId = ?
+            AND tn.TagName = 'bm.quotation'
+        '''
+        cur = con.execute(sql, (item_id,))
+        row = cur.fetchone()
+
+        if row is not None:
+            val = row[0]
+            o = json.loads(val)
+            quotation = o['text']
+        else:
+            quotation = None
+
+        sql = '''
+            SELECT Val
+            FROM Tags t
+            JOIN TagNames tn ON tn.OID = t.TagID
+            WHERE t.ItemId = ?
+            AND tn.TagName = 'bm.note'
+        '''
+        cur = con.execute(sql, (item_id,))
+        row = cur.fetchone()
+        if row is not None:
+            val = row[0]
+            o = json.loads(val)
+            note = o['text']
+        else:
+            note = None
+
+        note = Note(quotation, note)
+        notes.append(note)
+
+    return notes
+
+
 def export(books: List[Book], path: str):
     doc = dominate.document(title='PocketBook 740 export')
 
     with doc:
-        h1('Hightlights')
         for book in books:
             book.render()
 
@@ -137,6 +212,7 @@ def main(path):
     for book in books:
         book.file_name = get_file_name(con, book.oid)
         book.highlights = get_highlights(con, book.oid)
+        book.notes = get_notes(con, book.oid)
 
     con.close()
 
