@@ -108,10 +108,9 @@ def get_file_name(con: sqlite3.Connection, book_oid: int) -> str:
     return row[0]
 
 
-def get_highlights(con: sqlite3.Connection,
-                   book_oid: int) -> List[Highlight]:
-    highlights = []
-
+def select_items(con: sqlite3.Connection,
+                            book_oid: int,
+                            type_val: str) -> List[int]:
     sql = '''
         SELECT t.ItemID
         FROM Items i
@@ -119,99 +118,72 @@ def get_highlights(con: sqlite3.Connection,
         JOIN TagNames tn ON tn.OID = t.TagID    
         WHERE i.ParentID = ?
         AND tn.TagName = 'bm.type'
-        AND t.Val = 'highlight'
+        AND t.Val = ?
     '''
-    cur = con.execute(sql, (book_oid,))
+    cur = con.execute(sql, (book_oid, type_val))
     item_ids = [row[0] for row in cur]
+    return item_ids
 
+
+def select_quotation(con: sqlite3.Connection, item_id: int) -> str:
+    sql = '''
+        SELECT Val
+        FROM Tags t
+        JOIN TagNames tn ON tn.OID = t.TagID
+        WHERE t.ItemId = ?
+        AND tn.TagName = 'bm.quotation'
+    '''
+    cur = con.execute(sql, (item_id,))
+    row = cur.fetchone()
+
+    if row is None:
+        return None
+
+    val = row[0]
+    o = json.loads(val)
+    return o['text']
+
+
+def select_tag_value(con: sqlite3.Connection, item_id: int, tag: str) -> str:
+    sql = '''
+        SELECT Val
+        FROM Tags t
+        JOIN TagNames tn ON tn.OID = t.TagID
+        WHERE t.ItemId = ?
+        AND tn.TagName = ?
+    '''
+    cur = con.execute(sql, (item_id, tag))
+    row = cur.fetchone()
+
+    if row is None:
+        return None
+
+    return row[0]
+
+
+def get_highlights(con: sqlite3.Connection,
+                   book_oid: int) -> List[Highlight]:
+    highlights = []
+    item_ids = select_items(con, book_oid, 'highlight')
     for item_id in item_ids:
-        sql = '''
-            SELECT Val
-            FROM Tags t
-            JOIN TagNames tn ON tn.OID = t.TagID
-            WHERE t.ItemId = ?
-            AND tn.TagName = 'bm.quotation'
-        '''
-        cur = con.execute(sql, (item_id,))
-        row = cur.fetchone()
-        if row is not None:
-            val = row[0]
-            o = json.loads(val)
-            text = o['text']
-
-            sql = '''
-                SELECT Val
-                FROM Tags t
-                JOIN TagNames tn ON tn.OID = t.TagID
-                WHERE t.ItemId = ?
-                AND tn.TagName = 'bm.image'
-            '''
-            cur = con.execute(sql, (item_id,))
-            row = cur.fetchone()
-            if row is not None:
-                snapshot = row[0]
-            else:
-                snapshot = None
-
-            highlight = Highlight(text, snapshot)
-            highlights.append(highlight)
-
+        text = select_quotation(con, item_id)
+        snapshot = select_tag_value(con, item_id, 'bm.image')
+        highlight = Highlight(text, snapshot)
+        highlights.append(highlight)
     return highlights
 
 
 def get_notes(con: sqlite3.Connection,
               book_oid: int) -> List[Highlight]:
     notes = []
-
-    sql = '''
-        SELECT t.ItemID
-        FROM Items i
-        JOIN Tags t ON t.ItemID = i.OID
-        JOIN TagNames tn ON tn.OID = t.TagID    
-        WHERE i.ParentID = ?
-        AND tn.TagName = 'bm.type'
-        AND t.Val = 'note'
-    '''
-    cur = con.execute(sql, (book_oid,))
-    item_ids = [row[0] for row in cur]
-
+    item_ids = select_items(con, book_oid, 'note')
     for item_id in item_ids:
-        sql = '''
-            SELECT Val
-            FROM Tags t
-            JOIN TagNames tn ON tn.OID = t.TagID
-            WHERE t.ItemId = ?
-            AND tn.TagName = 'bm.quotation'
-        '''
-        cur = con.execute(sql, (item_id,))
-        row = cur.fetchone()
-
-        if row is not None:
-            val = row[0]
-            o = json.loads(val)
-            quotation = o['text']
-        else:
-            quotation = None
-
-        sql = '''
-            SELECT Val
-            FROM Tags t
-            JOIN TagNames tn ON tn.OID = t.TagID
-            WHERE t.ItemId = ?
-            AND tn.TagName = 'bm.note'
-        '''
-        cur = con.execute(sql, (item_id,))
-        row = cur.fetchone()
-        if row is not None:
-            val = row[0]
-            o = json.loads(val)
-            note = o['text']
-        else:
-            note = None
-
+        quotation = select_quotation(con, item_id)
+        val = select_tag_value(con, item_id, 'bm.note')
+        o = json.loads(val)
+        note = o['text']
         note = Note(quotation, note)
         notes.append(note)
-
     return notes
 
 
@@ -219,58 +191,18 @@ def get_bookmarks(con: sqlite3.Connection,
                   book_oid: int) -> List[Highlight]:
     bookmarks = []
 
-    sql = '''
-        SELECT t.ItemID
-        FROM Items i
-        JOIN Tags t ON t.ItemID = i.OID
-        JOIN TagNames tn ON tn.OID = t.TagID    
-        WHERE i.ParentID = ?
-        AND tn.TagName = 'bm.type'
-        AND t.Val = 'bookmark'
-    '''
-    cur = con.execute(sql, (book_oid,))
-    item_ids = [row[0] for row in cur]
+    item_ids = select_items(con, book_oid, 'bookmark')
 
     for item_id in item_ids:
-        sql = '''
-            SELECT Val
-            FROM Tags t
-            JOIN TagNames tn ON tn.OID = t.TagID
-            WHERE t.ItemId = ?
-            AND tn.TagName = 'bm.quotation'
-        '''
-        cur = con.execute(sql, (item_id,))
-        row = cur.fetchone()
-
-        if row is not None:
-            val = row[0]
-            o = json.loads(val)
-            text = o['text']
-        else:
-            text = None
-
-        sql = '''
-            SELECT Val
-            FROM Tags t
-            JOIN TagNames tn ON tn.OID = t.TagID
-            WHERE t.ItemId = ?
-            AND tn.TagName = 'bm.book_mark'
-        '''
-        cur = con.execute(sql, (item_id,))
-        row = cur.fetchone()
-        if row is not None:
-            val = row[0]
-            o = json.loads(val)
-            anchor = o['anchor']
-            parsed = urlparse.urlparse(anchor)
-            query = urlparse.parse_qs(parsed.query)
-            page = int(query['page'][0])
-        else:
-            page = None
-
+        text = select_quotation(con, item_id)
+        val = select_tag_value(con, item_id, 'bm.book_mark')
+        o = json.loads(val)
+        anchor = o['anchor']
+        parsed = urlparse.urlparse(anchor)
+        query = urlparse.parse_qs(parsed.query)
+        page = int(query['page'][0])
         bookmark = Bookmark(page, text)
         bookmarks.append(bookmark)
-
     return bookmarks
 
 
