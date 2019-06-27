@@ -19,10 +19,27 @@ class Book:
         self.bookmarks = []
         self.highlights = []
 
+    def render(self):
+        with div():
+            h2(self.title)
+            with ol():
+                for highlight in self.highlights:
+                    with li():
+                        highlight.render()
+
 class Highlight:
     def __init__(self, text: str, snapshot: bytes = None):
         self.text = text
         self.snapshot = snapshot
+
+    def render(self):
+        with div():
+            p(self.text)
+            if self.snapshot is not None:
+                image = self.snapshot
+                b64 = base64.b64encode(image).decode('utf8')
+                raw(f'<img src="data:image/jpeg;base64,{b64}"/>')
+
 
 
 def get_books(con: sqlite3.Connection) -> List[Book]:
@@ -100,22 +117,12 @@ def get_highlights(con: sqlite3.Connection,
 
 
 def export(books: List[Book], path: str):
-    doc = dominate.document(title='PocketBook 740')
+    doc = dominate.document(title='PocketBook 740 export')
 
     with doc:
         h1('Hightlights')
         for book in books:
-            with div(id='book'):
-                h2(book.title)
-                with ol():
-                    for highlight in book.highlights:
-                        with li():
-                            with div():
-                                p(highlight.text)
-                                if highlight.snapshot is not None:
-                                    image = highlight.snapshot
-                                    b64 = base64.b64encode(image).decode('utf8')
-                                    raw(f'<img src="data:image/jpeg;base64,{b64}"/>')
+            book.render()
 
     with open(path, 'w') as f:
         f.write(doc.render())
