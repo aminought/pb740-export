@@ -2,6 +2,7 @@ import base64
 import json
 import sqlite3
 from typing import List
+import urllib.parse as urlparse
 
 import click
 import dominate
@@ -20,11 +21,23 @@ class Book:
         self.highlights = []
 
     def render(self):
-        if len(self.highlights) == 0 and len(self.notes) == 0:
+        if len(self.highlights) == 0 \
+                and len(self.notes) == 0 \
+                and len(self.bookmarks) == 0:
             return
 
         with div():
             h2(self.title)
+            if self.authors is not None:
+                p(f'Authors: {self.authors}')
+            p(f'File: {self.file_name}')
+
+            if len(self.bookmarks) > 0:
+                h3('Bookmarks')
+                with ol():
+                    for bookmark in self.bookmarks:
+                        with li():
+                            bookmark.render()
 
             if len(self.highlights) > 0:
                 h3('Highlights')
@@ -32,7 +45,7 @@ class Book:
                     for highlight in self.highlights:
                         with li():
                             highlight.render()
-            
+
             if len(self.notes) > 0:
                 h3('Notes')
                 with ol():
@@ -64,6 +77,16 @@ class Note:
         with div():
             p(self.note)
             blockquote(p(self.quotation))
+
+
+class Bookmark:
+    def __init__(self, page: int, text: str):
+        self.page = page
+        self.text = text
+
+    def render(self):
+        with div():
+            p(f'Page: {self.page}, Text: {self.text}')
 
 
 def get_books(con: sqlite3.Connection) -> List[Book]:
@@ -192,6 +215,65 @@ def get_notes(con: sqlite3.Connection,
     return notes
 
 
+def get_bookmarks(con: sqlite3.Connection,
+                  book_oid: int) -> List[Highlight]:
+    bookmarks = []
+
+    sql = '''
+        SELECT t.ItemID
+        FROM Items i
+        JOIN Tags t ON t.ItemID = i.OID
+        JOIN TagNames tn ON tn.OID = t.TagID    
+        WHERE i.ParentID = ?
+        AND tn.TagName = 'bm.type'
+        AND t.Val = 'bookmark'
+    '''
+    cur = con.execute(sql, (book_oid,))
+    item_ids = [row[0] for row in cur]
+
+    for item_id in item_ids:
+        sql = '''
+            SELECT Val
+            FROM Tags t
+            JOIN TagNames tn ON tn.OID = t.TagID
+            WHERE t.ItemId = ?
+            AND tn.TagName = 'bm.quotation'
+        '''
+        cur = con.execute(sql, (item_id,))
+        row = cur.fetchone()
+
+        if row is not None:
+            val = row[0]
+            o = json.loads(val)
+            text = o['text']
+        else:
+            text = None
+
+        sql = '''
+            SELECT Val
+            FROM Tags t
+            JOIN TagNames tn ON tn.OID = t.TagID
+            WHERE t.ItemId = ?
+            AND tn.TagName = 'bm.book_mark'
+        '''
+        cur = con.execute(sql, (item_id,))
+        row = cur.fetchone()
+        if row is not None:
+            val = row[0]
+            o = json.loads(val)
+            anchor = o['anchor']
+            parsed = urlparse.urlparse(anchor)
+            query = urlparse.parse_qs(parsed.query)
+            page = int(query['page'][0])
+        else:
+            page = None
+
+        bookmark = Bookmark(page, text)
+        bookmarks.append(bookmark)
+
+    return bookmarks
+
+
 def export(books: List[Book], path: str):
     doc = dominate.document(title='PocketBook 740 export')
 
@@ -213,6 +295,7 @@ def main(path):
         book.file_name = get_file_name(con, book.oid)
         book.highlights = get_highlights(con, book.oid)
         book.notes = get_notes(con, book.oid)
+        book.bookmarks = get_bookmarks(con, book.oid)
 
     con.close()
 
