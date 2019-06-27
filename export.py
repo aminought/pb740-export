@@ -113,8 +113,8 @@ def get_file_name(con: sqlite3.Connection, book_oid: int) -> str:
 
 
 def select_items(con: sqlite3.Connection,
-                            book_oid: int,
-                            type_val: str) -> List[int]:
+                 book_oid: int,
+                 type_val: str) -> List[int]:
     sql = '''
         SELECT t.ItemID
         FROM Items i
