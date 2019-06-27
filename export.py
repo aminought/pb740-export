@@ -117,6 +117,7 @@ def select_items(con: sqlite3.Connection,
         JOIN Tags t ON t.ItemID = i.OID
         JOIN TagNames tn ON tn.OID = t.TagID    
         WHERE i.ParentID = ?
+        AND i.State = 0
         AND tn.TagName = 'bm.type'
         AND t.Val = ?
     '''
