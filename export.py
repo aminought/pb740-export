@@ -1,13 +1,12 @@
 import base64
 import json
 import sqlite3
-import urllib.parse as urlparse
 from datetime import datetime
 from typing import List
 
 import click
 import dominate
-from dominate.tags import *
+from dominate.tags import div, h2, h3, p, ol, li, blockquote
 from dominate.util import raw
 
 
@@ -81,14 +80,14 @@ class Note:
 
 
 class Bookmark:
-    def __init__(self, page: int, text: str, created: datetime):
-        self.page = page
+    def __init__(self, anchor: str, text: str, created: datetime):
+        self.anchor = anchor
         self.text = text
         self.created = created
 
     def render(self):
         with div():
-            p(f'Page: {self.page}')
+            p(f'Anchor: {self.anchor}')
             p(f'Text: {self.text}')
             p(f'Created: {self.created}')
 
@@ -119,7 +118,7 @@ def select_items(con: sqlite3.Connection,
         SELECT t.ItemID
         FROM Items i
         JOIN Tags t ON t.ItemID = i.OID
-        JOIN TagNames tn ON tn.OID = t.TagID    
+        JOIN TagNames tn ON tn.OID = t.TagID
         WHERE i.ParentID = ?
         AND i.State = 0
         AND tn.TagName = 'bm.type'
@@ -202,10 +201,7 @@ def get_bookmarks(con: sqlite3.Connection,
         o = json.loads(val)
         created = datetime.fromtimestamp(o['created'])
         anchor = o['anchor']
-        parsed = urlparse.urlparse(anchor)
-        query = urlparse.parse_qs(parsed.query)
-        page = int(query['page'][0])
-        bookmark = Bookmark(page, text, created)
+        bookmark = Bookmark(anchor, text, created)
         bookmarks.append(bookmark)
     return bookmarks
 
